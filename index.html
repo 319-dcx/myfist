@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>图片取证工具</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <h1>涉案图片取证分析平台</h1>
+    </div>
+    <div class="toolbar">
+        <input type="file" id="uploadBtn" multiple accept="image/*">
+        <button id="analyzeBtn">🔍 开始分析</button>
+        <button id="groupBtn">📍 查看分组</button>
+        <button id="saveCaseBtn">💾 保存案件</button>
+        <button id="loadCaseBtn">📂 加载案件</button>
+        <button id="reportBtn">📄 生成报告</button>
+    </div>
+    <div class="main-content">
+        <div class="image-list-panel">
+            <div class="list-header">
+                <span>📷 图片列表</span>
+                <span id="imageCount">0张</span>
+            </div>
+            <div id="list"></div>
+        </div>
+        <div class="preview-panel">
+            <div class="preview-header">🔎 图片预览</div>
+            <div class="preview-content">
+                <img id="previewImg" src="" alt="预览图片">
+                <div class="exif-card" id="info">点击左侧图片查看Exif信息</div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+<script src="myfunctions.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
