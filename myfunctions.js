@@ -162,9 +162,9 @@ async function makeReport(images, caseInfo = {}) {
     let psDetectedCount = 0;
     
     let reportLines = [];
-    reportLines.push("╔══════════════════════════════════════════════════════════════╗");
-    reportLines.push("║                   图片取证分析报告                           ║");
-    reportLines.push("╚══════════════════════════════════════════════════════════════╝");
+    reportLines.push("========================================");
+    reportLines.push("          图片取证分析报告");
+    reportLines.push("========================================");
     reportLines.push("");
     reportLines.push("【案件信息】");
     reportLines.push("案件名称：" + caseName);
@@ -172,9 +172,6 @@ async function makeReport(images, caseInfo = {}) {
     reportLines.push("报告日期：" + reportDate);
     reportLines.push("");
     reportLines.push("【检材清单】");
-    reportLines.push("┌────┬────────────────────────┬──────────────────┬──────────────┬─────────────┐");
-    reportLines.push("│编号│ 文件名                  │ 拍摄时间          │ GPS定位      │ 鉴定结果    │");
-    reportLines.push("├────┼────────────────────────┼──────────────────┼──────────────┼─────────────┤");
     
     for (let i = 0; i < images.length; i++) {
         let img = images[i];
@@ -188,54 +185,41 @@ async function makeReport(images, caseInfo = {}) {
             if (status.includes("ELA")) psDetectedCount++;
         }
         
-        let fileName = img.name.length > 20 ? img.name.substring(0, 17) + "..." : img.name;
-        let shootTime = img.exif?.timeOriginal || "无";
-        let gps = (img.exif?.lat && img.exif?.lng) ? `${img.exif.lat},${img.exif.lng}` : "无";
-        let resultIcon = status === "正常" ? "正常" : "可疑";
-        
-        reportLines.push(`│${String(i+1).padStart(2)}   │ ${fileName.padEnd(22)}│ ${shootTime.padEnd(16)}│ ${gps.padEnd(12)}│ ${resultIcon.padEnd(11)}│`);
-        if (i < images.length - 1) reportLines.push("├────┼────────────────────────┼──────────────────┼──────────────┼─────────────┤");
+        reportLines.push("");
+        reportLines.push(`【图片 ${i+1}】${img.name}`);
+        reportLines.push(`鉴定结果：${status === "正常" ? "正常" : "可疑"}`);
+        if (status !== "正常") {
+            reportLines.push(`可疑原因：${status}`);
+        }
+        if (img.exif?.timeOriginal) {
+            let shootTime = String(img.exif.timeOriginal);
+            reportLines.push(`拍摄时间：${shootTime}`);
+        }
+        if (img.exif?.make || img.exif?.model) {
+            let device = `${img.exif?.make || ''} ${img.exif?.model || ''}`.trim();
+            if (device) reportLines.push(`手机型号：${device}`);
+        }
+        if (img.exif?.lat && img.exif?.lng) {
+            reportLines.push(`GPS定位:${img.exif.lat}, ${img.exif.lng}`);
+        }
     }
     
-    reportLines.push("└────┴────────────────────────┴──────────────────┴──────────────┴─────────────┘");
     reportLines.push("");
     reportLines.push("【统计摘要】");
-    reportLines.push("检材总数：" + totalCount + " 张");
-    reportLines.push("├─ 正常图片：" + normalCount + " 张");
-    reportLines.push("└─ 可疑图片：" + suspiciousCount + " 张");
+    reportLines.push(`检材总数：${totalCount} 张`);
+    reportLines.push(`正常图片：${normalCount} 张`);
+    reportLines.push(`可疑图片：${suspiciousCount} 张`);
     if (suspiciousCount > 0) {
-        reportLines.push("    ├─ 无EXIF信息：" + noExifCount + " 张");
-        reportLines.push("    ├─ 无GPS定位：" + noGpsCount + " 张");
-        reportLines.push("    └─ ELA检测异常：" + psDetectedCount + " 张");
+        reportLines.push(`可疑图片分类：`);
+        reportLines.push(`  - 无EXIF信息:${noExifCount} 张`);
+        reportLines.push(`  - 无GPS定位:${noGpsCount} 张`);
+        reportLines.push(`  - ELA检测异常:${psDetectedCount} 张`);
     }
     reportLines.push("");
     reportLines.push("【位置分组结果】");
     let groupResult = groupByLocation(images);
     reportLines.push(groupResult);
     reportLines.push("");
-    reportLines.push("【详细鉴定意见】");
-    for (let i = 0; i < images.length; i++) {
-        let img = images[i];
-        let status = img.tamperResult || "未分析";
-        reportLines.push("");
-        reportLines.push(`● 图片${i+1}：${img.name}`);
-        reportLines.push(`   鉴定结果：${status === "正常" ? "正常" : "可疑"}`);
-        if (status !== "正常") {
-            reportLines.push(`   可疑原因：${status}`);
-        }
-        if (img.exif?.timeOriginal) {
-            reportLines.push(`   拍摄时间：${img.exif.timeOriginal}`);
-        }
-        if (img.exif?.make || img.exif?.model) {
-            let device = `${img.exif?.make || ''} ${img.exif?.model || ''}`.trim();
-            if (device) reportLines.push(`   手机型号：${device}`);
-        }
-        if (img.exif?.lat && img.exif?.lng) {
-            reportLines.push(`   GPS定位：${img.exif.lat}, ${img.exif.lng}`);
-        }
-        reportLines.push("");
-    }
-    
     reportLines.push("【鉴定结论】");
     if (suspiciousCount === 0) {
         reportLines.push(`经对 ${totalCount} 张涉案图片进行数字取证分析，未发现篡改痕迹，所有图片鉴定为正常。`);
@@ -243,8 +227,8 @@ async function makeReport(images, caseInfo = {}) {
         reportLines.push(`经对 ${totalCount} 张涉案图片进行数字取证分析，发现 ${suspiciousCount} 张图片存在可疑特征，建议进一步人工鉴定。`);
     }
     reportLines.push("");
-    reportLines.push("鉴定人：" + examiner);
-    reportLines.push("报告日期：" + reportDate);
+    reportLines.push(`鉴定人：${examiner}`);
+    reportLines.push(`报告日期：${reportDate}`);
     reportLines.push("");
     reportLines.push("【免责声明】");
     reportLines.push("本报告仅基于所提供的电子数据进行分析，分析结论受限于数据完整性。");
