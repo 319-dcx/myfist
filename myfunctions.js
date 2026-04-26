@@ -62,7 +62,7 @@ async function detectPS(file) {
                 const avgDiff = totalDiff / (data1.length / 4);
                 console.log("avgDiff:", avgDiff, "maxDiff:", maxDiff);
                 // 阈值可根据需要调整，这里先用较敏感的值
-                const isSuspicious = avgDiff > 11 && maxDiff > 100;
+                const isSuspicious = avgDiff > 10 && maxDiff > 40;
                 console.log("isSuspicious:", isSuspicious);
                 resolve({ isSuspicious, avgDiff, maxDiff });
             };
