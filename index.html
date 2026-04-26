@@ -17,6 +17,9 @@
         <button id="saveCaseBtn">💾 保存案件</button>
         <button id="loadCaseBtn">📂 加载案件</button>
         <button id="reportBtn">📄 生成报告</button>
+        <label style="margin-left: 15px; font-size: 14px; user-select: none;">
+            <input type="checkbox" id="enableTimeCheck"> 启用时间篡改检测（可能因文件复制误报）
+        </label>
     </div>
     <div class="main-content">
         <div class="image-list-panel">
@@ -35,8 +38,13 @@
         </div>
     </div>
 </div>
+<!-- exifr 库来用于解析图片的 Exif 数据（拍摄时间、GPS 等） -->
 <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+
+<!-- 核心函数库：包含 getExif、detectPS、checkTamper、groupByLocation、makeReport 等自定义函数 -->
 <script src="myfunctions.js"></script>
+
+<!-- 处理界面交互、上传图片、分析、报告生成、案件保存加载 -->
 <script src="script.js"></script>
 </body>
 </html>

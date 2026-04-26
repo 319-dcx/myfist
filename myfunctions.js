@@ -4,56 +4,47 @@ async function getExif(file) {
         let data = await exifr.parse(file);
         if (!data) return null;
         
-        let timeOriginal = data.DateTimeOriginal || data.DateTime || data.ModifyDate || null;
-        if (timeOriginal && typeof timeOriginal === 'object' && timeOriginal.toISOString) {
-            timeOriginal = timeOriginal.toLocaleString();
-        }
-        let lat = data.latitude ?? data.GPSLatitude ?? null;
-        let lng = data.longitude ?? data.GPSLongitude ?? null;
+        let timeOriginal = data.DateTimeOriginal || null;
+        let timeModified = data.DateTime || null;
+        let lat = data.latitude ?? null;
+        let lng = data.longitude ?? null;
         
-        if (lat === null && data.GPSLatitude) {
-            const toDecimal = (coord, ref) => {
-                if (!coord) return null;
-                if (typeof coord === 'number') return coord;
-                if (Array.isArray(coord) && coord.length >= 3) {
-                    let decimal = coord[0] + coord[1]/60 + coord[2]/3600;
-                    if (ref === 'S' || ref === 'W') decimal = -decimal;
-                    return decimal;
-                }
-                return null;
-            };
-            lat = toDecimal(data.GPSLatitude, data.GPSLatitudeRef);
-            lng = toDecimal(data.GPSLongitude, data.GPSLongitudeRef);
-        }
+        // 手机型号
+        let make = data.Make || null;
+        let model = data.Model || null;
         
-        return { timeOriginal, lat, lng };
+        return { timeOriginal, timeModified, lat, lng, make, model };
     } catch (error) {
         console.error("解析出错:", error);
         return null;
     }
 }
 
-// ==================== ELA检测（PS痕迹检测） ====================
+// ==================== 第一周：ELA检测（PS痕迹检测） ====================
 async function detectPS(file) {
+    console.log("detectPS 开始执行，文件：", file.name);
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
+            console.log("原图加载成功，尺寸：", img.width, img.height);
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
             canvas.height = img.height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0);
             
+            // 第一次导出低质量 JPEG
             const lowQualityDataUrl = canvas.toDataURL('image/jpeg', 0.5);
             const tempImg = new Image();
-            
             tempImg.onload = () => {
+                console.log("低质量图加载成功");
                 const canvas2 = document.createElement('canvas');
                 canvas2.width = img.width;
                 canvas2.height = img.height;
                 const ctx2 = canvas2.getContext('2d');
                 ctx2.drawImage(tempImg, 0, 0);
                 
+                // 获取像素数据
                 const imgData1 = ctx.getImageData(0, 0, img.width, img.height);
                 const imgData2 = ctx2.getImageData(0, 0, img.width, img.height);
                 const data1 = imgData1.data;
@@ -69,54 +60,63 @@ async function detectPS(file) {
                     if (diff > maxDiff) maxDiff = diff;
                 }
                 const avgDiff = totalDiff / (data1.length / 4);
-                const isSuspicious = avgDiff > 18 && maxDiff > 45;
-                
+                console.log("avgDiff:", avgDiff, "maxDiff:", maxDiff);
+                // 阈值可根据需要调整，这里先用较敏感的值
+                const isSuspicious = avgDiff > 11 && maxDiff > 100;
+                console.log("isSuspicious:", isSuspicious);
                 resolve({ isSuspicious, avgDiff, maxDiff });
             };
+            tempImg.onerror = (err) => {
+                console.error("低质量图加载失败", err);
+                resolve({ isSuspicious: false, avgDiff: 0, maxDiff: 0 });
+            };
             tempImg.src = lowQualityDataUrl;
+        };
+        img.onerror = (err) => {
+            console.error("原图加载失败", err);
+            resolve({ isSuspicious: false, avgDiff: 0, maxDiff: 0 });
         };
         img.src = URL.createObjectURL(file);
     });
 }
 
-// ==================== 篡改检测 ====================
-async function checkTamper(imgObj) {
+// ==================== 第二周：篡改检测 ====================
+async function checkTamper(imgObj, checkTime = false) {
     let exif = imgObj.exif;
     let file = imgObj.file;
     let suspicions = [];
 
     if (!exif) {
-        suspicions.push("无EXIF信息");
-        suspicions.push("无拍摄时间");
-        suspicions.push("无GPS定位");
+        suspicions.push("无EXIF信息", "无拍摄时间", "无GPS定位");
     } else {
         if (!exif.timeOriginal) suspicions.push("无拍摄时间");
         if (!exif.lat || !exif.lng) suspicions.push("无GPS定位");
         
-        if (exif.timeOriginal && file && file.lastModified) {
+        // 只有用户主动勾选时才检测时间一致性
+        if (checkTime && exif.timeOriginal && file && file.lastModified) {
             let shootTime = new Date(exif.timeOriginal).getTime();
             let fileTime = file.lastModified;
-            let diffHours = Math.abs(shootTime - fileTime) / (1000 * 60 * 60);
-            if (diffHours > 1) {
+            let diffMs = Math.abs(shootTime - fileTime);
+            let diffHours = diffMs / (1000 * 60 * 60);
+            if (diffHours > 1) {  // 超过1小时即报警（因为用户明确想查时间篡改）
                 suspicions.push(`拍摄时间与文件时间相差${diffHours.toFixed(1)}小时`);
             }
         }
     }
 
-    try {
-        let elaResult = await detectPS(file);
-        if (elaResult.isSuspicious) {
-            suspicions.push(`ELA检测到PS痕迹 (平均差异=${elaResult.avgDiff.toFixed(1)}, 最大差异=${elaResult.maxDiff.toFixed(0)})`);
-        }
-    } catch(e) {
-        console.error("ELA检测失败:", e);
+   try {
+    let elaResult = await detectPS(file);
+    if (elaResult.isSuspicious) {
+        suspicions.push(`ELA检测到PS痕迹 (平均差异=${elaResult.avgDiff.toFixed(1)}, 最大差异=${elaResult.maxDiff.toFixed(0)})`);
     }
+} catch(e) {
+    console.error("ELA检测失败:", e);
+}
 
     let unique = [...new Set(suspicions)];
     return unique.length === 0 ? "正常" : "可疑：" + unique.join("、");
 }
-
-// ==================== 位置分组 ====================
+// ==================== 第二周：位置分组 ====================
 function groupByLocation(images) {
     let groups = {};
     let groupIndex = 0;
@@ -148,7 +148,7 @@ function groupByLocation(images) {
     return result.length ? result.join("\n") : "没有找到任何图片";
 }
 
-// ==================== 生成报告（纯文本） ====================
+// ==================== 第三周：生成取证报告 ====================
 async function makeReport(images, caseInfo = {}) {
     let caseName = caseInfo.caseName || "未命名案件";
     let examiner = caseInfo.examiner || "未填写";
@@ -226,6 +226,10 @@ async function makeReport(images, caseInfo = {}) {
         if (img.exif?.timeOriginal) {
             reportLines.push(`   拍摄时间：${img.exif.timeOriginal}`);
         }
+        if (img.exif?.make || img.exif?.model) {
+            let device = `${img.exif?.make || ''} ${img.exif?.model || ''}`.trim();
+            if (device) reportLines.push(`   手机型号：${device}`);
+        }
         if (img.exif?.lat && img.exif?.lng) {
             reportLines.push(`   GPS定位：${img.exif.lat}, ${img.exif.lng}`);
         }
@@ -255,7 +259,6 @@ const DB_NAME = 'ImageForensicsDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'cases';
 
-// 打开数据库
 function openDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -271,13 +274,12 @@ function openDB() {
     });
 }
 
-// 保存案件（完整保存图片 File 对象）
 async function saveCaseToLocal(caseName, images) {
     const db = await openDB();
     const id = 'case_' + Date.now() + '_' + caseName;
     const imagesToSave = images.map(img => ({
         name: img.name,
-        file: img.file,          // File 对象可直接存入 IndexedDB
+        file: img.file,
         exif: img.exif,
         tamperResult: img.tamperResult
     }));
@@ -291,7 +293,6 @@ async function saveCaseToLocal(caseName, images) {
     });
 }
 
-// 获取案件列表
 async function getCaseListFromLocal() {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -306,7 +307,6 @@ async function getCaseListFromLocal() {
     });
 }
 
-// 加载指定案件（恢复完整的图片对象，包含预览 URL）
 async function loadCaseFromLocal(caseId) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -320,7 +320,6 @@ async function loadCaseFromLocal(caseId) {
                 resolve(null);
                 return;
             }
-            // 恢复完整的图片对象：重新生成 blob URL
             const images = caseData.images.map((img, idx) => {
                 const url = URL.createObjectURL(img.file);
                 return {

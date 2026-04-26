@@ -41,14 +41,23 @@ uploadBtn.addEventListener('change', function(e) {
         div.appendChild(nameSpan);
         div.appendChild(statusSpan);
         
+        // 点击预览：读取 Exif 并显示（含手机型号）
         div.onclick = async () => {
             previewImg.src = url;
             infoDiv.innerText = '正在读取 Exif...';
             if (typeof getExif === 'function') {
                 const exifData = await getExif(file);
                 if (exifData) {
+                    // 手机型号
+                    let device = '';
+                    if (exifData.make || exifData.model) {
+                        device = `${exifData.make || ''} ${exifData.model || ''}`.trim();
+                    } else {
+                        device = '未知';
+                    }
                     infoDiv.innerHTML = `
                         拍摄时间：${exifData.timeOriginal || '无'}<br>
+                        手机型号：${device}<br>
                         经纬度：${exifData.lat ?? '无'}, ${exifData.lng ?? '无'}
                     `;
                     const target = images.find(img => img.id === id);
@@ -71,7 +80,10 @@ analyzeBtn.addEventListener('click', async () => {
         alert('请先上传图片');
         return;
     }
-    
+
+    // ❶ 获取复选框状态（新增）
+    const enableTimeCheck = document.getElementById('enableTimeCheck')?.checked || false;
+
     infoDiv.innerText = '开始分析...';
     const items = document.querySelectorAll('.image-item');
     for (let i = 0; i < images.length; i++) {
@@ -87,7 +99,8 @@ analyzeBtn.addEventListener('click', async () => {
         
         let result = '正常';
         if (typeof checkTamper === 'function') {
-            result = await checkTamper(img);
+            // ❷ 将复选框状态传入 checkTamper（新增第二个参数）
+            result = await checkTamper(img, enableTimeCheck);
         } else {
             result = '待集成checkTamper';
         }
@@ -109,7 +122,6 @@ analyzeBtn.addEventListener('click', async () => {
     }
     infoDiv.innerText = `分析完成！共 ${images.length} 张图片。`;
 });
-
 // 查看分组
 groupBtn.addEventListener('click', () => {
     if (images.length === 0) {
@@ -125,7 +137,7 @@ groupBtn.addEventListener('click', () => {
 });
 
 // 保存案件
-saveCaseBtn.addEventListener('click', () => {
+saveCaseBtn.addEventListener('click', async () => {
     if (images.length === 0) {
         alert('没有图片可保存，请先上传图片');
         return;
@@ -134,7 +146,7 @@ saveCaseBtn.addEventListener('click', () => {
     if (!caseName) return;
     
     if (typeof saveCaseToLocal === 'function') {
-        saveCaseToLocal(caseName, images);
+        await saveCaseToLocal(caseName, images);
         alert(`案件“${caseName}”已保存`);
     } else {
         alert('保存功能未准备好，请检查 myfunctions.js');
@@ -153,7 +165,7 @@ loadCaseBtn.addEventListener('click', async () => {
         return;
     }
     let listStr = caseList.map((c, idx) => `${idx + 1}. ${c.name}`).join('\n');
-    let selected = prompt(`请选择案件编号(1-${caseList.length}):\n\n${listStr}`);
+    let selected = prompt(`请选择案件编号（1-${caseList.length}）：\n\n${listStr}`);
     if (!selected) return;
     let index = parseInt(selected) - 1;
     if (isNaN(index) || index < 0 || index >= caseList.length) {
@@ -165,7 +177,7 @@ loadCaseBtn.addEventListener('click', async () => {
         alert('加载失败');
         return;
     }
-    // 释放旧图片的 URL 对象（避免内存泄漏）
+    // 释放旧 URL
     images.forEach(img => {
         if (img.url) URL.revokeObjectURL(img.url);
     });
@@ -199,7 +211,7 @@ reportBtn.addEventListener('click', async () => {
     URL.revokeObjectURL(url);
 });
 
-// 渲染列表（加载案件后使用）
+// 渲染列表
 function renderImageList() {
     const listDiv = document.getElementById('list');
     listDiv.innerHTML = '';
@@ -238,8 +250,15 @@ function renderImageList() {
                 return;
             }
             if (img.exif) {
+                let device = '';
+                if (img.exif.make || img.exif.model) {
+                    device = `${img.exif.make || ''} ${img.exif.model || ''}`.trim();
+                } else {
+                    device = '未知';
+                }
                 infoDiv.innerHTML = `
                     拍摄时间：${img.exif.timeOriginal || '无'}<br>
+                    手机型号：${device}<br>
                     经纬度：${img.exif.lat ?? '无'}, ${img.exif.lng ?? '无'}
                 `;
             } else {
@@ -249,8 +268,4 @@ function renderImageList() {
         
         listDiv.appendChild(div);
     });
-}
-function updateImageCount() {
-    const countSpan = document.getElementById('imageCount');
-    if (countSpan) countSpan.innerText = images.length + '张';
 }
