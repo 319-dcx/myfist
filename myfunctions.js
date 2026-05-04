@@ -337,3 +337,31 @@ async function getCaseListFromLocal() {
         };
     });
 }
+async function loadCaseFromLocal(caseId) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(caseId);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            const caseData = request.result;
+            if (!caseData) {
+                resolve(null);
+                return;
+            }
+            const images = caseData.images.map((img, idx) => {
+                const url = URL.createObjectURL(img.file);
+                return {
+                    id: Date.now() + '-' + idx,
+                    name: img.name,
+                    file: img.file,
+                    url: url,
+                    exif: img.exif,
+                    tamperResult: img.tamperResult
+                };
+            });
+            resolve(images);
+        };
+    });
+}
